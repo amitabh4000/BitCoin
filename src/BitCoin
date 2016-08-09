@@ -1,0 +1,123 @@
+import akka.actor.ActorSystem
+import scala.collection.mutable.ListBuffer
+import akka.actor.Props
+import akka.actor.Actor
+import akka.routing.RoundRobinRouter
+import scala.collection.mutable.HashMap
+import java.security.MessageDigest
+import scala.util.Random
+import akka.actor.ActorSelection.toScala
+import akka.actor.actorRef2Scala
+import scala.util.control.Breaks._
+
+sealed trait Bitcoins
+case class Find_Coins(CountZeroes:Integer,workload:Integer,str:String) 
+case class getstring(list_of_strings:ListBuffer[String],str:String)
+case class SendIp(a:String)
+ 
+class Master(CountZeroes:Integer) extends Actor{
+   var startingTime:Long=0
+   var remotecount:Integer=0;
+   var list_of_strings = new ListBuffer[String]()
+   var TotalCount:Integer=0
+   var workerdone:Integer=0
+   val workload:Integer=1000000
+   var corenum=12
+   def receive = {
+    case "Message from remote worker" =>
+       println("Remote Connection Established")
+       sender ! Find_Coins(CountZeroes,workload,"remote")
+    case "Start Creating Worker" =>
+      val worker =context.actorOf(Props[Worker].withRouter(RoundRobinRouter(nrOfInstances= corenum)))
+      for(i <- 1 to corenum){
+      worker ! Find_Coins(CountZeroes,workload,"local")
+      startingTime=System.currentTimeMillis()
+      }
+       
+    case getstring(list_of_string,str) =>
+         if(str.equalsIgnoreCase("remote")) corenum=corenum+1
+         TotalCount=TotalCount+list_of_string.size
+         list_of_strings++=list_of_string
+         println("A worker has finished its first step")
+         if(list_of_string.size>0){
+         println("The coins found are ")
+         list_of_string.foreach(println)
+         }
+         if((System.currentTimeMillis() - startingTime) < 100000)
+           sender! Find_Coins(CountZeroes,workload,"local")
+           else{
+           workerdone=workerdone+1;
+         println(str+"  Worker no."+workerdone+" has done the processing")
+            //Printing the Bitcoins
+        if(workerdone==corenum){
+          println("Total number of bitcoins found is"+TotalCount)
+          list_of_strings.foreach(println)
+          val timetaken=System.currentTimeMillis()-startingTime
+          println("Total time taken in mining is"+timetaken)
+          context.system.shutdown()
+        }
+           }
+  } 
+   
+}
+class Worker extends Actor{
+  def receive = {
+      case Find_Coins(countzero:Integer,workload,str:String) =>
+      var count:Integer=0
+      var i:Integer=0
+      println(str+"worker starts executing")
+      val startingTime=System.currentTimeMillis()
+      var list_of_string = new ListBuffer[String]()
+             
+            for(i <- 1 to workload){
+                   val RandString:String = Random.alphanumeric.take(26).mkString
+                   val Uf_ID: String ="dsundar"
+                   val finalstring: String= Uf_ID+RandString
+                   val md = MessageDigest.getInstance("SHA-256")
+                   var HashString: String=md.digest(finalstring.getBytes)
+                  .foldLeft("")((s: String, byte: Byte) =>s+
+                   Character.forDigit((byte & 0xf0) >> 4, 16) +
+                   Character.forDigit(byte & 0x0f, 16))
+                   var comparestring:String=""
+                  for(i <- 1 to countzero){
+                   comparestring=comparestring+"0"
+                }
+        
+                if(comparestring.equals(HashString.substring(0,countzero))){
+                  var temp:String=Uf_ID+RandString+"   "+HashString
+                  list_of_string+=temp
+                  temp=" "
+                  count=count+1
+                } 
+                
+             
+            }
+            
+          
+      //println("Count of zeroes is :"+count)
+      sender! getstring(list_of_string,str)
+      
+      case SendIp(serverIp) =>
+      println(serverIp)
+      val server = context.actorSelection("akka.tcp://ServerSystem@"+serverIp+":5100/user/Master")
+      server ! "Message from remote worker"
+   }
+   
+}
+ 
+object BitCoin extends App 
+{
+      if(args(0).contains("."))
+      {
+           val workerremote =  ActorSystem("WorkerSystem").actorOf(Props [Worker].withRouter(RoundRobinRouter(nrOfInstances =12)))
+           var i:Integer=0
+                 for(i <- 1 to 12)
+                    workerremote ! SendIp( args(0) )         
+       }
+      else{
+            println("Local invokation")
+            val master=ActorSystem("ServerSystem").actorOf(Props (new Master(args(0).toInt)),name="Master")
+            master ! "Start Creating Worker"
+      }
+  }
+
