@@ -71,7 +71,7 @@ class Worker extends Actor{
              
             for(i <- 1 to workload){
                    val RandString:String = Random.alphanumeric.take(26).mkString
-                   val Uf_ID: String ="dsundar"
+                   val Uf_ID: String ="amitabh"
                    val finalstring: String= Uf_ID+RandString
                    val md = MessageDigest.getInstance("SHA-256")
                    var HashString: String=md.digest(finalstring.getBytes)
